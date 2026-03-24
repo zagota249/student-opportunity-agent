@@ -1,10 +1,22 @@
-const express=require('express');
-const Router=express.Router();
-const {protect}=require('../middleware/authmiddleware');
-const {applyinternship,getinternship,getinternshipbyid,updateinternship,deleteinternship}=require('../controllers/internshipcontroller');
+const express = require('express');
+const router = express.Router();
+const { protect } = require('../middleware/authmiddleware');
+const {
+    createInternship,
+    getInternships,
+    getInternshipById,
+    updateInternship,
+    deleteInternship
+} = require('../controllers/internshipController');
 
-router.route('/').post(protect,applyinternship).get(protect,getinternship);
-router.route('/:id').get(protect,getinternshipbyid).put(protect,updateinternship).delete(protect,deleteinternship);
+// Protected routes
+router.route('/')
+    .post(protect, createInternship)
+    .get(protect, getInternships);
 
+router.route('/:id')
+    .get(protect, getInternshipById)
+    .put(protect, updateInternship)
+    .delete(protect, deleteInternship);
 
-module.exports=Router;
+module.exports = router;

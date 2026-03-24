@@ -35,6 +35,22 @@ const userSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
+    linkedinEmail:{
+        type: String,
+        default: null
+    },
+    linkedinPassword: {
+        type: String,
+        default: null},
+    indeedEmail: {
+        type: String,
+        default: null
+    },
+    indeedPassword: {
+        type: String,
+        default: null
+    },
+
     coverLetter: {
         type: String,
         default: null

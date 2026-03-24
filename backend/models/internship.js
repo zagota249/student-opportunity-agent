@@ -1,63 +1,55 @@
-const { application } = require('express');
-const mongoose= require('mongoose');
-
+const mongoose = require('mongoose');
 
 const internshipSchema = new mongoose.Schema({
-    user:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:'User',
-        required:true
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
     },
-    title:{
-        type:String,
-        require:[true,"Please enter internship title"]
+    title: {
+        type: String,
+        required: [true, "Please enter internship title"]  // ✅ required
     },
-    company:{
-        type:String,
-        require:[true,"Please enter company name"]
+    company: {
+        type: String,
+        required: [true, "Please enter company name"]  // ✅ required
     },
-    location:{
-        type:String,
-        default:"Remote"
+    location: {
+        type: String,
+        default: "Remote"
     },
-    type:{
-        type:String,
-        enum:["Full-time","Part-time","Remote","On-site"],
-        default:"Remote"
-
+    type: {
+        type: String,
+        enum: ["Full-time", "Part-time", "Remote", "On-site"],
+        default: "Remote"
     },
-    description:{
-        type:String,
-        require:[true,"Please enter internship description"]
-
-    }, 
-    requirements:[string],salary:string,
-    resumeused:{
-        type:String,
-        default:'null'
-
+    description: {
+        type: String,
+        required: [true, "Please enter internship description"]  // ✅ required
     },
-    coverletterused:{
-        type:String,
-        default:'null'
-
+    requirements: [String],  // ✅ sahi
+    salary: String,  // ✅ sahi
+    resumeUsed: {
+        type: String,
+        default: null  // ✅ null, 'null' string nahi
     },
-    status:{
-        type:String,
-        enum:["applied","pending","accepted","rejected"],
-        default:"pending"
+    coverLetterUsed: {
+        type: String,
+        default: null  // ✅ null
     },
-    appliedAt:{
-        type:Date,
-        default:Date.now
+    status: {
+        type: String,
+        enum: ["applied", "pending", "accepted", "rejected"],
+        default: "pending"
     },
-    deadline:Date,
-    applicationlink:String,
-},{
-    timestamps:true
-
-
+    appliedAt: {
+        type: Date,
+        default: Date.now
+    },
+    deadline: Date,
+    applicationLink: String
+}, {
+    timestamps: true
 });
 
-
-module.exports=mongoose.model('Internship',internshipSchema);
+module.exports = mongoose.model('Internship', internshipSchema);

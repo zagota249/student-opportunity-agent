@@ -16,6 +16,11 @@ app.use(express.urlencoded({ extended: true }));
 app.get('/api/test', (req, res) => {
     res.json({ message: "congrats! your backend server is working fine" });
 });
+const internshipRoutes=require("./routes/internshiproute");
+app.use('/api/internships',internshipRoutes);
+
+const agentRoutes = require('./routes/agentroute');
+app.use('/api/agent', agentRoutes);
 
 // ✅ Body test route - yeh check karne ke liye ke Postman body bhej raha hai ya nahi
 app.post('/api/test-body', (req, res) => {
@@ -34,9 +39,9 @@ app.use('/api/auth', authRoutes);
 const connectDB = async () => {
     try {
         const conn = await mongoose.connect(process.env.MONGODB_URI);
-        console.log(`✅ MongoDB connected successfully: ${conn.connection.host}`);
+        console.log(` MongoDB connected successfully: ${conn.connection.host}`);
     } catch (error) {
-        console.error("❌ MongoDB connection error:", error);
+        console.error(" MongoDB connection error:", error);
         process.exit(1);
     }
 };
@@ -44,5 +49,5 @@ connectDB();
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`🚀 Server is running on Port ${PORT}`);
+    console.log(` Server is running on Port ${PORT}`);
 });
