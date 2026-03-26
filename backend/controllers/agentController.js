@@ -1,37 +1,45 @@
 const { runAgent, testConnection } = require('../services/tinyfishservices');
 
-// Default Indeed email for the user
-const DEFAULT_INDEED_EMAIL = 'zaim08121@gmail.com';
+// Default email for the user
+const DEFAULT_EMAIL = 'zaim08121@gmail.com';
 
 const applyLinkedIn = async (req, res) => {
     try {
-        const { jobTitle, location, company, field, skills } = req.body;
-        const user = req.user;
+        const { jobTitle, location, company, field, skills, linkedinEmail, linkedinPassword, linkedinOTP, userSkills, userName } = req.body;
+        const user = req.user || {};
 
-        // Validate user has LinkedIn credentials
-        if (!user.linkedinEmail || !user.linkedinPassword) {
+        // Use credentials from request body or fall back to user profile
+        const email = linkedinEmail || user.linkedinEmail;
+        const password = linkedinPassword || user.linkedinPassword;
+        const otpCode = linkedinOTP || '';
+
+        // Validate credentials
+        if (!email || !password) {
             return res.status(400).json({
                 success: false,
-                message: 'LinkedIn credentials not configured. Please update your profile settings.'
+                message: 'LinkedIn credentials required. Please add email AND password in Settings.'
             });
         }
 
-        // Get user's profile skills and education for matching
-        const userSkills = user.skills?.length ? user.skills.join(', ') : '';
-        const userDegree = user.education?.degree || '';
-        const userField = user.education?.institution ? `${userDegree} from ${user.education.institution}` : userDegree;
+        // Get user's skills
+        const skillsList = userSkills?.length ? userSkills.join(', ') : (user.skills?.length ? user.skills.join(', ') : '');
+        const name = userName || user.name || 'Applicant';
 
-        console.log(`📋 LinkedIn job search: "${jobTitle}" at ${company} in ${location}`);
-        console.log(`🎯 Job Field: ${field}`);
-        console.log(`👤 User Skills: ${userSkills || 'Not specified'}`);
-        console.log(`🎓 User Education: ${userField || 'Not specified'}`);
+        console.log(`[LINKEDIN] Applying to: "${jobTitle}" at ${company}`);
+        console.log(`[LINKEDIN] Using email: ${email}`);
+        console.log(`[LINKEDIN] OTP provided: ${otpCode ? 'Yes' : 'No'}`);
 
         const goal = `
-            IMPORTANT: Apply ONLY to jobs that match the USER'S RESUME/PROFILE:
+            APPLY TO JOB ON LINKEDIN:
+
+            USER CREDENTIALS:
+            - Email: ${email}
+            - Password: ${password}
+            ${otpCode ? `- 2FA/OTP Code: ${otpCode} (USE THIS IF LINKEDIN ASKS FOR VERIFICATION CODE)` : ''}
 
             USER PROFILE:
-            - Skills: ${userSkills || 'General'}
-            - Education: ${userField || 'Student'}
+            - Name: ${name}
+            - Skills: ${skillsList || 'General'}
 
             JOB TO APPLY:
             - Job Title: "${jobTitle}"
@@ -40,22 +48,26 @@ const applyLinkedIn = async (req, res) => {
             - Location: "${location}"
             - Required Skills: ${skills?.join(', ') || 'Not specified'}
 
-            STRICT RULES:
+            STEPS:
             1. Go to linkedin.com
-            2. Login with email: ${user.linkedinEmail} and password: ${user.linkedinPassword}
-            3. Search for "${jobTitle}" at "${company}" in ${location}
-            4. ONLY apply if the job field "${field}" matches user's skills: ${userSkills || 'any'}
-            5. DO NOT apply to jobs in unrelated fields
-            6. Verify the job requires skills the user has before applying
-            7. Use Easy Apply only
-            8. Return: job title, company, and whether it matched user's profile
+            2. Login with email: ${email} and password: ${password}
+            3. IF LinkedIn asks for verification/2FA code: ${otpCode ? `Enter this code: ${otpCode}` : 'STOP and return error saying OTP required'}
+            4. Search for "${jobTitle}" at "${company}" in ${location}
+            5. Find the matching job posting
+            6. Click "Easy Apply" button
+            7. Fill in any required fields with user info
+            8. Submit the application
+            9. Confirm application was successful
+            10. Return: job title, company, and confirmation status
         `;
 
-        const result = await runAgent('https://www.linkedin.com', goal, user);
+        const result = await runAgent('https://www.linkedin.com', goal, { ...user, linkedinEmail: email, linkedinPassword: password });
+
+        console.log(`[LINKEDIN] Application completed for ${jobTitle} at ${company}`);
         res.json({ success: true, data: result });
 
     } catch (error) {
-        console.error('LinkedIn Apply Error:', error);
+        console.error('[LINKEDIN] Error:', error);
         res.status(500).json({
             success: false,
             message: error.error || error.message || 'Failed to run LinkedIn automation',
@@ -66,41 +78,24 @@ const applyLinkedIn = async (req, res) => {
 
 const applyIndeed = async (req, res) => {
     try {
-        const { jobTitle, location, company, field, skills } = req.body;
-        const user = req.user;
+        const { jobTitle, location, company, field, skills, indeedEmail, userSkills, userName } = req.body;
+        const user = req.user || {};
 
-        // Use user's Indeed email or default to zaim08121@gmail.com
-        const indeedEmail = user.indeedEmail || DEFAULT_INDEED_EMAIL;
+        // Use email from request body or fall back to default
+        const email = indeedEmail || user.indeedEmail || DEFAULT_EMAIL;
+        const name = userName || user.name || 'Applicant';
+        const skillsList = userSkills?.length ? userSkills.join(', ') : (user.skills?.length ? user.skills.join(', ') : '');
 
-        // Indeed only requires email, no password needed
-        if (!indeedEmail) {
-            return res.status(400).json({
-                success: false,
-                message: 'Indeed email not configured. Please update your profile settings.'
-            });
-        }
-
-        // Get user's profile skills and education for matching
-        const userSkills = user.skills?.length ? user.skills.join(', ') : '';
-        const userDegree = user.education?.degree || '';
-        const userField = user.education?.institution ? `${userDegree} from ${user.education.institution}` : userDegree;
-        const userName = user.name || 'Applicant';
-
-        console.log(`📋 Indeed job search: "${jobTitle}" at ${company} in ${location}`);
-        console.log(`🎯 Job Field: ${field}`);
-        console.log(`👤 User Skills: ${userSkills || 'Not specified'}`);
-        console.log(`🎓 User Education: ${userField || 'Not specified'}`);
-        console.log(`📧 Using Indeed email: ${indeedEmail}`);
+        console.log(`[INDEED] Applying to: "${jobTitle}" at ${company}`);
+        console.log(`[INDEED] Using email: ${email}`);
 
         const goal = `
-            IMPORTANT: Apply to jobs on Indeed WITHOUT LOGGING IN (guest apply mode).
-            Indeed requires OTP for login, so DO NOT attempt to login.
+            APPLY TO JOB ON INDEED (Guest Mode - No Login Required):
 
             USER PROFILE:
-            - Name: ${userName}
-            - Email: ${indeedEmail}
-            - Skills: ${userSkills || 'General'}
-            - Education: ${userField || 'Student'}
+            - Name: ${name}
+            - Email: ${email}
+            - Skills: ${skillsList || 'General'}
 
             JOB TO APPLY:
             - Job Title: "${jobTitle}"
@@ -112,35 +107,28 @@ const applyIndeed = async (req, res) => {
             STEPS:
             1. Go to indeed.com
             2. Search for "${jobTitle}" at "${company}" in ${location}
-            3. Find the job posting that matches
+            3. Find the matching job posting
             4. Click "Apply" or "Apply now" button
-            5. If asked to sign in, look for "Continue as guest" or "Apply without account" option
+            5. If asked to sign in, look for "Continue as guest" option
             6. Fill in the application form:
-               - Name: ${userName}
-               - Email: ${indeedEmail}
-               - Fill other required fields as needed
-            7. ONLY apply if the job field "${field}" matches user's skills: ${userSkills || 'any'}
-            8. DO NOT apply to jobs in unrelated fields
-            9. Submit the application
-            10. Return: job title, company, confirmation status
+               - Name: ${name}
+               - Email: ${email}
+            7. Submit the application
+            8. IMPORTANT: After successful application, confirmation will be sent to ${email}
+            9. Return: job title, company, and confirmation status
         `;
 
-        const result = await runAgent('https://www.indeed.com', goal, user);
+        const result = await runAgent('https://www.indeed.com', goal, { ...user, indeedEmail: email });
 
-        console.log('✅ Indeed automation completed:', result);
+        console.log(`[INDEED] Application completed for ${jobTitle} at ${company}`);
         res.json({ success: true, data: result });
 
     } catch (error) {
-        console.error('❌ Indeed Apply Error:', error);
-
-        // Handle different error formats
-        const errorMessage = error.error || error.message || 'Failed to run Indeed automation';
-        const errorDetails = error.details || error.statusCode || null;
-
+        console.error('[INDEED] Error:', error);
         res.status(500).json({
             success: false,
-            message: errorMessage,
-            error: errorDetails
+            message: error.error || error.message || 'Failed to run Indeed automation',
+            error: error.details || null
         });
     }
 };

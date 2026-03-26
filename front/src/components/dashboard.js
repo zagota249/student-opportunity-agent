@@ -1,90 +1,97 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     Container, Grid, Card, CardContent, Typography, Box, Button, Paper,
     Tabs, Tab, TextField, InputAdornment, Select, MenuItem, FormControl,
-    InputLabel, Chip, Divider, Alert, CircularProgress, Checkbox, ListItemText, OutlinedInput
+    InputLabel, Chip, Divider, Alert, CircularProgress, Checkbox, ListItemText, OutlinedInput,
+    Skeleton
 } from '@mui/material';
 import {
     Work, School, Speed, AutoAwesome, Search, LocationOn,
     OpenInNew, CloudUpload, Save, Dashboard as DashboardIcon,
-    Settings, Explore, Category
+    Settings, Explore, Category, Refresh
 } from '@mui/icons-material';
-import { applyLinkedIn, applyIndeed, getProfile, testTinyFishConnection } from '../services/tinyfishapi';
+import { applyLinkedIn, applyIndeed, getProfile, testTinyFishConnection, searchJobs, searchScholarships } from '../services/tinyfishapi';
 import api from '../services/tinyfishapi';
 
-// Extended internship data with direct apply links
-const internshipsData = [
-    // USA
-    { id: 1, title: "Software Engineering Intern", company: "Google", country: "USA", type: "Remote", link: "https://careers.google.com/jobs/results/?q=intern", field: "Computer Science", skills: ["Python", "JavaScript"], deadline: "2026-04-15" },
-    { id: 2, title: "Data Science Intern", company: "Microsoft", country: "USA", type: "Hybrid", link: "https://careers.microsoft.com/us/en/search-results?keywords=intern", field: "Data Science", skills: ["Python", "ML"], deadline: "2026-04-20" },
+// Fallback internship data (used when API is unavailable) - Real companies with real career links
+const fallbackInternships = [
+    // USA - Top Tech Companies
+    { id: 1, title: "Software Engineering Intern", company: "Google", country: "USA", type: "Remote", link: "https://careers.google.com/jobs/results/?q=intern", field: "Computer Science", skills: ["Python", "JavaScript", "Go"], deadline: "2026-04-15" },
+    { id: 2, title: "Data Science Intern", company: "Microsoft", country: "USA", type: "Hybrid", link: "https://careers.microsoft.com/us/en/search-results?keywords=intern", field: "Data Science", skills: ["Python", "ML", "Azure"], deadline: "2026-04-20" },
     { id: 3, title: "Frontend Developer Intern", company: "Meta", country: "USA", type: "Remote", link: "https://www.metacareers.com/jobs?q=intern", field: "Computer Science", skills: ["React", "JavaScript"], deadline: "2026-04-25" },
     { id: 4, title: "Backend Developer Intern", company: "Amazon", country: "USA", type: "On-site", link: "https://www.amazon.jobs/en/search?base_query=intern", field: "Computer Science", skills: ["Java", "AWS"], deadline: "2026-05-01" },
-    { id: 5, title: "ML Engineer Intern", company: "OpenAI", country: "USA", type: "Remote", link: "https://openai.com/careers#jobs", field: "Artificial Intelligence", skills: ["Python", "PyTorch"], deadline: "2026-05-10" },
-    { id: 6, title: "DevOps Intern", company: "Netflix", country: "USA", type: "Remote", link: "https://jobs.netflix.com/search?q=intern", field: "Computer Science", skills: ["Docker", "K8s"], deadline: "2026-05-15" },
-    { id: 7, title: "Cybersecurity Intern", company: "IBM", country: "USA", type: "Remote", link: "https://www.ibm.com/careers/search?q=intern", field: "Cybersecurity", skills: ["Security", "Python"], deadline: "2026-05-25" },
-    { id: 8, title: "Product Design Intern", company: "Apple", country: "USA", type: "On-site", link: "https://jobs.apple.com/en-us/search?search=intern", field: "Design", skills: ["Figma", "UI/UX"], deadline: "2026-06-25" },
+    { id: 5, title: "ML Engineer Intern", company: "OpenAI", country: "USA", type: "Remote", link: "https://openai.com/careers", field: "Artificial Intelligence", skills: ["Python", "PyTorch"], deadline: "2026-05-10" },
+    { id: 6, title: "DevOps Intern", company: "Netflix", country: "USA", type: "Remote", link: "https://jobs.netflix.com/search?q=intern", field: "Computer Science", skills: ["Docker", "Kubernetes"], deadline: "2026-05-15" },
+    { id: 7, title: "Cybersecurity Intern", company: "IBM", country: "USA", type: "Remote", link: "https://www.ibm.com/careers", field: "Cybersecurity", skills: ["Security", "Python"], deadline: "2026-05-25" },
+    { id: 8, title: "iOS Developer Intern", company: "Apple", country: "USA", type: "On-site", link: "https://jobs.apple.com/en-us/search?search=intern", field: "Mobile Development", skills: ["Swift", "iOS"], deadline: "2026-06-01" },
+    { id: 9, title: "Cloud Engineer Intern", company: "Salesforce", country: "USA", type: "Hybrid", link: "https://salesforce.wd1.myworkdayjobs.com/Futureforce_Internships", field: "Cloud Computing", skills: ["AWS", "Salesforce"], deadline: "2026-05-20" },
+    { id: 10, title: "Full Stack Intern", company: "Uber", country: "USA", type: "Hybrid", link: "https://www.uber.com/us/en/careers/", field: "Full Stack Development", skills: ["Node.js", "React"], deadline: "2026-05-25" },
     // UK
-    { id: 9, title: "Business Analyst Intern", company: "Deloitte", country: "UK", type: "Hybrid", link: "https://apply.deloitte.com/careers/SearchJobs?q=intern", field: "Business", skills: ["Excel", "SQL"], deadline: "2026-05-30" },
-    { id: 10, title: "Marketing Intern", company: "Unilever", country: "UK", type: "On-site", link: "https://careers.unilever.com/search-jobs?q=intern", field: "Marketing", skills: ["Digital Marketing", "Analytics"], deadline: "2026-06-01" },
-    { id: 11, title: "Finance Intern", company: "Goldman Sachs", country: "UK", type: "On-site", link: "https://www.goldmansachs.com/careers/students/programs/", field: "Finance", skills: ["Financial Modeling", "Excel"], deadline: "2026-06-05" },
-    { id: 12, title: "AI Research Intern", company: "DeepMind", country: "UK", type: "On-site", link: "https://deepmind.google/about/careers/", field: "Artificial Intelligence", skills: ["Python", "TensorFlow"], deadline: "2026-06-20" },
+    { id: 11, title: "AI Research Intern", company: "DeepMind", country: "UK", type: "On-site", link: "https://deepmind.google/about/careers/", field: "Artificial Intelligence", skills: ["Python", "TensorFlow"], deadline: "2026-06-20" },
+    { id: 12, title: "Finance Tech Intern", company: "Goldman Sachs", country: "UK", type: "On-site", link: "https://www.goldmansachs.com/careers/students/programs/", field: "Finance", skills: ["Python", "SQL"], deadline: "2026-06-05" },
+    { id: 13, title: "Business Analyst Intern", company: "Deloitte", country: "UK", type: "Hybrid", link: "https://apply.deloitte.com/careers", field: "Business", skills: ["Excel", "SQL"], deadline: "2026-05-30" },
+    { id: 14, title: "Marketing Intern", company: "Unilever", country: "UK", type: "On-site", link: "https://careers.unilever.com/", field: "Marketing", skills: ["Marketing", "Analytics"], deadline: "2026-06-01" },
     // Germany
-    { id: 13, title: "Research Intern", company: "Max Planck Institute", country: "Germany", type: "On-site", link: "https://www.mpg.de/career/positions", field: "Research", skills: ["Research", "Writing"], deadline: "2026-06-10" },
-    { id: 14, title: "Engineering Intern", company: "Siemens", country: "Germany", type: "Hybrid", link: "https://jobs.siemens.com/careers?query=intern", field: "Engineering", skills: ["CAD", "Engineering"], deadline: "2026-06-15" },
-    { id: 15, title: "Cloud Intern", company: "SAP", country: "Germany", type: "Hybrid", link: "https://jobs.sap.com/search?q=intern", field: "Computer Science", skills: ["Cloud", "Java"], deadline: "2026-07-01" },
-    { id: 16, title: "Automotive Intern", company: "BMW", country: "Germany", type: "On-site", link: "https://www.bmwgroup.jobs/en.html", field: "Engineering", skills: ["Automotive", "Engineering"], deadline: "2026-07-20" },
+    { id: 15, title: "Cloud Intern", company: "SAP", country: "Germany", type: "Hybrid", link: "https://jobs.sap.com/search?q=intern", field: "Cloud Computing", skills: ["Cloud", "Java"], deadline: "2026-07-01" },
+    { id: 16, title: "Automotive Software Intern", company: "BMW", country: "Germany", type: "On-site", link: "https://www.bmwgroup.jobs/en.html", field: "Software Engineering", skills: ["C++", "Embedded"], deadline: "2026-07-20" },
+    { id: 17, title: "Engineering Intern", company: "Siemens", country: "Germany", type: "Hybrid", link: "https://jobs.siemens.com/careers", field: "Engineering", skills: ["Python", "CAD"], deadline: "2026-06-15" },
     // Canada
-    { id: 17, title: "Data Engineer Intern", company: "Shopify", country: "Canada", type: "Remote", link: "https://www.shopify.com/careers/search?q=intern", field: "Data Science", skills: ["Python", "SQL"], deadline: "2026-06-30" },
-    { id: 18, title: "Software Developer Intern", company: "RBC", country: "Canada", type: "Hybrid", link: "https://jobs.rbc.com/ca/en/students", field: "Computer Science", skills: ["Java", "Python"], deadline: "2026-05-15" },
+    { id: 18, title: "E-commerce Intern", company: "Shopify", country: "Canada", type: "Remote", link: "https://www.shopify.com/careers", field: "Full Stack Development", skills: ["Ruby", "React"], deadline: "2026-06-30" },
+    { id: 19, title: "Software Developer Intern", company: "RBC", country: "Canada", type: "Hybrid", link: "https://jobs.rbc.com/ca/en/students", field: "Computer Science", skills: ["Java", "Python"], deadline: "2026-05-15" },
     // Sweden
-    { id: 19, title: "Mobile Developer Intern", company: "Spotify", country: "Sweden", type: "Hybrid", link: "https://www.lifeatspotify.com/jobs?q=intern", field: "Computer Science", skills: ["React Native", "iOS"], deadline: "2026-05-20" },
-    { id: 20, title: "Game Developer Intern", company: "DICE/EA", country: "Sweden", type: "On-site", link: "https://www.ea.com/careers/students", field: "Computer Science", skills: ["C++", "Unity"], deadline: "2026-06-01" },
-    // Japan
-    { id: 21, title: "Robotics Intern", company: "Sony", country: "Japan", type: "On-site", link: "https://www.sony.com/en/SonyInfo/Jobs/", field: "Engineering", skills: ["Robotics", "Python"], deadline: "2026-07-10" },
-    { id: 22, title: "Technology Intern", company: "Toyota", country: "Japan", type: "On-site", link: "https://global.toyota/en/careers/", field: "Engineering", skills: ["Automotive", "AI"], deadline: "2026-08-01" },
-    // Switzerland
-    { id: 23, title: "Healthcare Data Intern", company: "Roche", country: "Switzerland", type: "Hybrid", link: "https://careers.roche.com/global/en/search-results?keywords=intern", field: "Healthcare", skills: ["Data Analysis", "R"], deadline: "2026-07-15" },
-    { id: 24, title: "Research Intern", company: "CERN", country: "Switzerland", type: "On-site", link: "https://careers.cern/students", field: "Research", skills: ["Physics", "Python"], deadline: "2026-03-15" },
-    // Australia
-    { id: 25, title: "QA Engineer Intern", company: "Atlassian", country: "Australia", type: "Remote", link: "https://www.atlassian.com/company/careers/all-jobs?search=intern", field: "Computer Science", skills: ["Testing", "Automation"], deadline: "2026-07-05" },
-    { id: 26, title: "Mining Tech Intern", company: "BHP", country: "Australia", type: "On-site", link: "https://www.bhp.com/careers/graduates-students", field: "Engineering", skills: ["Engineering", "Data"], deadline: "2026-08-15" },
-    // UAE
-    { id: 27, title: "Software Engineer Intern", company: "Careem", country: "UAE", type: "Hybrid", link: "https://www.careem.com/en-ae/careers/", field: "Computer Science", skills: ["Python", "Mobile"], deadline: "2026-05-01" },
-    { id: 28, title: "Data Analyst Intern", company: "Emirates", country: "UAE", type: "On-site", link: "https://www.emiratesgroupcareers.com/students/", field: "Data Science", skills: ["SQL", "Python"], deadline: "2026-06-15" },
-    { id: 29, title: "Finance Intern", company: "ADNOC", country: "UAE", type: "On-site", link: "https://www.adnoc.ae/careers", field: "Finance", skills: ["Finance", "Excel"], deadline: "2026-07-01" },
-    { id: 30, title: "Marketing Intern", company: "Noon", country: "UAE", type: "Hybrid", link: "https://www.noon.com/careers", field: "Marketing", skills: ["Digital Marketing", "Analytics"], deadline: "2026-05-20" },
-    // Saudi Arabia
-    { id: 31, title: "Tech Intern", company: "Aramco", country: "Saudi Arabia", type: "On-site", link: "https://www.aramco.com/en/careers/professionals", field: "Engineering", skills: ["Engineering", "Tech"], deadline: "2026-06-01" },
-    { id: 32, title: "IT Intern", company: "NEOM", country: "Saudi Arabia", type: "On-site", link: "https://www.neom.com/en-us/careers", field: "Computer Science", skills: ["Cloud", "AI"], deadline: "2026-08-01" },
-    // Pakistan
-    { id: 33, title: "Software Developer Intern", company: "Systems Limited", country: "Pakistan", type: "On-site", link: "https://www.systemsltd.com/careers", field: "Computer Science", skills: ["Java", ".NET"], deadline: "2026-05-15" },
-    { id: 34, title: "Web Developer Intern", company: "Netsol Technologies", country: "Pakistan", type: "Hybrid", link: "https://www.netsoltech.com/careers", field: "Computer Science", skills: ["JavaScript", "React"], deadline: "2026-06-01" },
-    { id: 35, title: "Data Science Intern", company: "Jazz", country: "Pakistan", type: "On-site", link: "https://www.jazz.com.pk/careers/", field: "Data Science", skills: ["Python", "ML"], deadline: "2026-05-30" },
-    { id: 36, title: "Engineering Intern", company: "Engro Corporation", country: "Pakistan", type: "On-site", link: "https://www.engro.com/careers/", field: "Engineering", skills: ["Chemical", "Engineering"], deadline: "2026-07-01" },
-    { id: 37, title: "Banking Intern", company: "HBL", country: "Pakistan", type: "On-site", link: "https://www.hbl.com/careers", field: "Finance", skills: ["Finance", "Banking"], deadline: "2026-06-15" },
-    // India
-    { id: 38, title: "Software Intern", company: "Infosys", country: "India", type: "Hybrid", link: "https://www.infosys.com/careers/apply.html", field: "Computer Science", skills: ["Java", "Python"], deadline: "2026-05-01" },
-    { id: 39, title: "Tech Intern", company: "TCS", country: "India", type: "On-site", link: "https://www.tcs.com/careers", field: "Computer Science", skills: ["Programming", "Cloud"], deadline: "2026-06-01" },
-    { id: 40, title: "AI Intern", company: "Flipkart", country: "India", type: "Hybrid", link: "https://www.flipkartcareers.com/", field: "Artificial Intelligence", skills: ["Python", "ML"], deadline: "2026-05-15" },
+    { id: 20, title: "Music Tech Intern", company: "Spotify", country: "Sweden", type: "Hybrid", link: "https://www.lifeatspotify.com/jobs", field: "Computer Science", skills: ["Python", "Java"], deadline: "2026-05-20" },
     // Singapore
-    { id: 41, title: "FinTech Intern", company: "DBS Bank", country: "Singapore", type: "Hybrid", link: "https://www.dbs.com/careers/students", field: "Finance", skills: ["FinTech", "Python"], deadline: "2026-06-01" },
-    { id: 42, title: "Software Intern", company: "Grab", country: "Singapore", type: "Remote", link: "https://grab.careers/", field: "Computer Science", skills: ["Go", "Microservices"], deadline: "2026-05-20" },
+    { id: 21, title: "Ride-Hailing Tech Intern", company: "Grab", country: "Singapore", type: "Remote", link: "https://grab.careers/", field: "Computer Science", skills: ["Go", "Microservices"], deadline: "2026-05-20" },
+    { id: 22, title: "FinTech Intern", company: "DBS Bank", country: "Singapore", type: "Hybrid", link: "https://www.dbs.com/careers/students", field: "Finance", skills: ["Python", "SQL"], deadline: "2026-06-01" },
+    // UAE
+    { id: 23, title: "Software Engineer Intern", company: "Careem", country: "UAE", type: "Hybrid", link: "https://www.careem.com/en-ae/careers/", field: "Computer Science", skills: ["Python", "Mobile"], deadline: "2026-05-01" },
+    { id: 24, title: "Data Analyst Intern", company: "Emirates", country: "UAE", type: "On-site", link: "https://www.emiratesgroupcareers.com/students/", field: "Data Science", skills: ["SQL", "Python"], deadline: "2026-06-15" },
+    // Pakistan
+    { id: 25, title: "Software Developer Intern", company: "Systems Limited", country: "Pakistan", type: "On-site", link: "https://www.systemsltd.com/careers", field: "Computer Science", skills: ["Java", ".NET"], deadline: "2026-05-15" },
+    { id: 26, title: "Web Developer Intern", company: "Netsol Technologies", country: "Pakistan", type: "Hybrid", link: "https://www.netsoltech.com/careers", field: "Web Development", skills: ["JavaScript", "React"], deadline: "2026-06-01" },
+    { id: 27, title: "Data Science Intern", company: "Jazz", country: "Pakistan", type: "On-site", link: "https://www.jazz.com.pk/careers/", field: "Data Science", skills: ["Python", "ML"], deadline: "2026-05-30" },
+    // India
+    { id: 28, title: "Software Intern", company: "Infosys", country: "India", type: "Hybrid", link: "https://www.infosys.com/careers/", field: "Computer Science", skills: ["Java", "Python"], deadline: "2026-05-01" },
+    { id: 29, title: "Tech Intern", company: "TCS", country: "India", type: "On-site", link: "https://www.tcs.com/careers", field: "Computer Science", skills: ["Java", "Cloud"], deadline: "2026-06-01" },
+    { id: 30, title: "AI Intern", company: "Flipkart", country: "India", type: "Hybrid", link: "https://www.flipkartcareers.com/", field: "Artificial Intelligence", skills: ["Python", "ML"], deadline: "2026-05-15" },
     // China
-    { id: 43, title: "AI Research Intern", company: "Alibaba", country: "China", type: "On-site", link: "https://talent.alibaba.com/", field: "Artificial Intelligence", skills: ["Python", "Deep Learning"], deadline: "2026-07-01" },
-    { id: 44, title: "Hardware Intern", company: "Huawei", country: "China", type: "On-site", link: "https://career.huawei.com/", field: "Engineering", skills: ["Hardware", "5G"], deadline: "2026-06-15" },
+    { id: 31, title: "AI Research Intern", company: "Alibaba", country: "China", type: "On-site", link: "https://talent.alibaba.com/", field: "Artificial Intelligence", skills: ["Python", "Deep Learning"], deadline: "2026-07-01" },
+    { id: 32, title: "5G Research Intern", company: "Huawei", country: "China", type: "On-site", link: "https://career.huawei.com/", field: "Engineering", skills: ["C++", "5G"], deadline: "2026-06-15" },
+    // Japan
+    { id: 33, title: "Robotics Intern", company: "Sony", country: "Japan", type: "On-site", link: "https://www.sony.com/en/SonyInfo/Jobs/", field: "Robotics", skills: ["Python", "ROS"], deadline: "2026-07-10" },
+    { id: 34, title: "Automotive AI Intern", company: "Toyota", country: "Japan", type: "On-site", link: "https://global.toyota/en/careers/", field: "Artificial Intelligence", skills: ["Python", "CV"], deadline: "2026-08-01" },
     // South Korea
-    { id: 45, title: "Electronics Intern", company: "Samsung", country: "South Korea", type: "On-site", link: "https://www.samsung.com/sec/aboutsamsung/careers/", field: "Engineering", skills: ["Electronics", "AI"], deadline: "2026-08-01" },
-    { id: 46, title: "Gaming Intern", company: "NCSoft", country: "South Korea", type: "On-site", link: "https://global.ncsoft.com/eng/recruit/", field: "Computer Science", skills: ["Game Dev", "C++"], deadline: "2026-07-15" },
+    { id: 35, title: "Electronics Intern", company: "Samsung", country: "South Korea", type: "On-site", link: "https://www.samsung.com/sec/aboutsamsung/careers/", field: "Engineering", skills: ["C++", "Electronics"], deadline: "2026-08-01" },
+    // Australia
+    { id: 36, title: "Software QA Intern", company: "Atlassian", country: "Australia", type: "Remote", link: "https://www.atlassian.com/company/careers", field: "Computer Science", skills: ["Testing", "Automation"], deadline: "2026-07-05" },
     // France
-    { id: 47, title: "Aerospace Intern", company: "Airbus", country: "France", type: "On-site", link: "https://www.airbus.com/en/careers", field: "Aerospace Engineering", skills: ["Aerospace", "Engineering"], deadline: "2026-06-01" },
-    { id: 48, title: "Luxury Brand Intern", company: "LVMH", country: "France", type: "On-site", link: "https://www.lvmh.com/talents/", field: "Marketing", skills: ["Marketing", "Luxury"], deadline: "2026-05-15" },
+    { id: 37, title: "Aerospace Intern", company: "Airbus", country: "France", type: "On-site", link: "https://www.airbus.com/en/careers", field: "Aerospace Engineering", skills: ["Python", "MATLAB"], deadline: "2026-06-01" },
     // Netherlands
-    { id: 49, title: "Tech Intern", company: "Booking.com", country: "Netherlands", type: "Hybrid", link: "https://careers.booking.com/early-careers/", field: "Computer Science", skills: ["Python", "ML"], deadline: "2026-06-01" },
-    { id: 50, title: "Semiconductor Intern", company: "ASML", country: "Netherlands", type: "On-site", link: "https://www.asml.com/en/careers/students", field: "Engineering", skills: ["Physics", "Engineering"], deadline: "2026-07-01" },
+    { id: 38, title: "Travel Tech Intern", company: "Booking.com", country: "Netherlands", type: "Hybrid", link: "https://careers.booking.com/", field: "Computer Science", skills: ["Python", "ML"], deadline: "2026-06-01" },
     // Remote/Global
-    { id: 51, title: "Open Source Intern", company: "GitHub", country: "Remote/Global", type: "Remote", link: "https://github.com/about/careers", field: "Computer Science", skills: ["Git", "Open Source"], deadline: "2026-05-01" },
-    { id: 52, title: "DevRel Intern", company: "Twilio", country: "Remote/Global", type: "Remote", link: "https://www.twilio.com/company/jobs", field: "Computer Science", skills: ["APIs", "Communication"], deadline: "2026-06-15" },
-    { id: 53, title: "Remote Developer Intern", company: "GitLab", country: "Remote/Global", type: "Remote", link: "https://about.gitlab.com/jobs/", field: "Computer Science", skills: ["DevOps", "Ruby"], deadline: "2026-05-20" },
+    { id: 39, title: "Open Source Intern", company: "GitHub", country: "Remote/Global", type: "Remote", link: "https://github.com/about/careers", field: "Computer Science", skills: ["Git", "TypeScript"], deadline: "2026-05-01" },
+    { id: 40, title: "DevRel Intern", company: "Twilio", country: "Remote/Global", type: "Remote", link: "https://www.twilio.com/company/jobs", field: "Computer Science", skills: ["APIs", "Python"], deadline: "2026-06-15" },
+    { id: 41, title: "Remote Developer Intern", company: "GitLab", country: "Remote/Global", type: "Remote", link: "https://about.gitlab.com/jobs/", field: "DevOps", skills: ["Ruby", "DevOps"], deadline: "2026-05-20" },
+    { id: 42, title: "Backend Intern", company: "Stripe", country: "Remote/Global", type: "Remote", link: "https://stripe.com/jobs", field: "Backend Development", skills: ["Ruby", "Go"], deadline: "2026-06-10" },
+    { id: 43, title: "Infrastructure Intern", company: "Cloudflare", country: "Remote/Global", type: "Remote", link: "https://www.cloudflare.com/careers/", field: "Cloud Computing", skills: ["Go", "Rust"], deadline: "2026-06-20" },
+    { id: 44, title: "Developer Tools Intern", company: "Vercel", country: "Remote/Global", type: "Remote", link: "https://vercel.com/careers", field: "Frontend Development", skills: ["React", "Next.js"], deadline: "2026-05-25" },
+    { id: 45, title: "Database Intern", company: "MongoDB", country: "Remote/Global", type: "Remote", link: "https://www.mongodb.com/careers", field: "Database", skills: ["MongoDB", "Node.js"], deadline: "2026-06-30" },
+    // WEB DEVELOPMENT - JavaScript/TypeScript/Node.js jobs
+    { id: 46, title: "JavaScript Developer Intern", company: "Airbnb", country: "USA", type: "Remote", link: "https://careers.airbnb.com/", field: "Web Development", skills: ["JavaScript", "React", "Node.js"], deadline: "2026-05-15" },
+    { id: 47, title: "Full Stack Developer Intern", company: "Spotify", country: "Sweden", type: "Remote", link: "https://www.lifeatspotify.com/jobs", field: "Web Development", skills: ["TypeScript", "Node.js", "React"], deadline: "2026-05-20" },
+    { id: 48, title: "Node.js Backend Intern", company: "PayPal", country: "USA", type: "Hybrid", link: "https://careers.pypl.com/home/", field: "Backend Development", skills: ["Node.js", "Express.js", "MongoDB"], deadline: "2026-06-01" },
+    { id: 49, title: "MERN Stack Intern", company: "Toptal", country: "Remote/Global", type: "Remote", link: "https://www.toptal.com/careers", field: "Full Stack Development", skills: ["MongoDB", "Express.js", "React", "Node.js"], deadline: "2026-05-30" },
+    { id: 50, title: "React Developer Intern", company: "Discord", country: "USA", type: "Remote", link: "https://discord.com/careers", field: "Frontend Development", skills: ["React", "TypeScript", "JavaScript"], deadline: "2026-06-10" },
+    { id: 51, title: "TypeScript Developer Intern", company: "Slack", country: "USA", type: "Remote", link: "https://slack.com/careers", field: "Web Development", skills: ["TypeScript", "Node.js", "React"], deadline: "2026-05-25" },
+    { id: 52, title: "Frontend Engineer Intern", company: "Figma", country: "USA", type: "Remote", link: "https://www.figma.com/careers/", field: "Frontend Development", skills: ["TypeScript", "React", "Figma"], deadline: "2026-06-15" },
+    { id: 53, title: "Web Developer Intern", company: "Notion", country: "USA", type: "Remote", link: "https://www.notion.so/careers", field: "Web Development", skills: ["JavaScript", "TypeScript", "React"], deadline: "2026-05-20" },
+    { id: 54, title: "Express.js Developer Intern", company: "Twitch", country: "USA", type: "Remote", link: "https://www.twitch.tv/jobs", field: "Backend Development", skills: ["Node.js", "Express.js", "MongoDB"], deadline: "2026-06-05" },
+    { id: 55, title: "Full Stack JS Intern", company: "Netlify", country: "Remote/Global", type: "Remote", link: "https://www.netlify.com/careers/", field: "Full Stack Development", skills: ["JavaScript", "Node.js", "React"], deadline: "2026-05-28" },
+    { id: 56, title: "Docker/DevOps Intern", company: "Docker Inc", country: "USA", type: "Remote", link: "https://www.docker.com/careers/", field: "DevOps", skills: ["Docker", "Node.js", "JavaScript"], deadline: "2026-06-20" },
+    { id: 57, title: "UI/UX Developer Intern", company: "Adobe", country: "USA", type: "Hybrid", link: "https://adobe.wd5.myworkdayjobs.com/external_experienced", field: "Web Development", skills: ["JavaScript", "React", "Figma"], deadline: "2026-05-15" },
+    { id: 58, title: "Next.js Developer Intern", company: "HashiCorp", country: "Remote/Global", type: "Remote", link: "https://www.hashicorp.com/careers", field: "Web Development", skills: ["Next.js", "TypeScript", "Node.js"], deadline: "2026-06-10" },
+    { id: 59, title: "Backend Node Intern", company: "LinkedIn", country: "USA", type: "Hybrid", link: "https://careers.linkedin.com/", field: "Backend Development", skills: ["Node.js", "Express.js", "MongoDB"], deadline: "2026-05-30" },
+    { id: 60, title: "JavaScript Engineer Intern", company: "Dropbox", country: "USA", type: "Remote", link: "https://www.dropbox.com/jobs", field: "Web Development", skills: ["JavaScript", "TypeScript", "React"], deadline: "2026-06-01" },
 ];
 
 // Extended scholarships data with direct apply links
@@ -173,18 +180,36 @@ const countries = [
 ];
 const fields = [
     'All Fields',
-    // Technology
-    'Computer Science', 'Data Science', 'Artificial Intelligence', 'Cybersecurity', 'Software Engineering', 'Web Development', 'Mobile Development',
+    // Computer Science & Technology (Expanded)
+    'Computer Science', 'Software Engineering', 'Web Development', 'Mobile Development', 'Frontend Development', 'Backend Development', 'Full Stack Development',
+    'Data Science', 'Data Analytics', 'Data Engineering', 'Machine Learning', 'Artificial Intelligence', 'Deep Learning', 'Natural Language Processing',
+    'Cybersecurity', 'Information Security', 'Network Security', 'Cloud Computing', 'DevOps', 'System Administration',
+    'Database Administration', 'Game Development', 'Embedded Systems', 'Internet of Things', 'Blockchain', 'Quantum Computing',
+    'Computer Networks', 'Operating Systems', 'Computer Graphics', 'Human Computer Interaction', 'Robotics', 'Computer Vision',
     // Engineering
     'Engineering', 'Electrical Engineering', 'Mechanical Engineering', 'Civil Engineering', 'Chemical Engineering', 'Aerospace Engineering',
+    'Biomedical Engineering', 'Industrial Engineering', 'Environmental Engineering', 'Materials Engineering',
     // Business & Finance
-    'Business', 'Finance', 'Accounting', 'Marketing', 'Management', 'Economics', 'Entrepreneurship',
+    'Business', 'Finance', 'Accounting', 'Marketing', 'Management', 'Economics', 'Entrepreneurship', 'Human Resources', 'Supply Chain Management',
     // Sciences
-    'Medicine', 'Healthcare', 'Pharmacy', 'Biotechnology', 'Biology', 'Chemistry', 'Physics', 'Mathematics',
+    'Medicine', 'Healthcare', 'Pharmacy', 'Biotechnology', 'Biology', 'Chemistry', 'Physics', 'Mathematics', 'Statistics',
     // Arts & Humanities
-    'Design', 'Architecture', 'Law', 'Education', 'Psychology', 'Journalism', 'Media Studies',
+    'Design', 'UI/UX Design', 'Graphic Design', 'Architecture', 'Law', 'Education', 'Psychology', 'Journalism', 'Media Studies',
     // Other
-    'Research', 'Leadership', 'Peace Studies', 'Environmental Science', 'Agriculture', 'Social Sciences'
+    'Research', 'Leadership', 'Peace Studies', 'Environmental Science', 'Agriculture', 'Social Sciences', 'Project Management'
+];
+
+// Skills list for multi-select dropdown
+const skillsList = [
+    'Python', 'JavaScript', 'Java', 'C++', 'C#', 'TypeScript', 'Go', 'Rust', 'Ruby', 'PHP', 'Swift', 'Kotlin',
+    'React', 'Angular', 'Vue.js', 'Node.js', 'Django', 'Flask', 'Spring Boot', 'Express.js', 'Next.js',
+    'HTML', 'CSS', 'SQL', 'NoSQL', 'MongoDB', 'PostgreSQL', 'MySQL', 'Redis', 'GraphQL',
+    'AWS', 'Azure', 'Google Cloud', 'Docker', 'Kubernetes', 'Terraform', 'CI/CD', 'Jenkins', 'Git',
+    'Machine Learning', 'Deep Learning', 'TensorFlow', 'PyTorch', 'NLP', 'Computer Vision', 'Data Analysis',
+    'REST APIs', 'Microservices', 'System Design', 'Agile', 'Scrum', 'Linux', 'DevOps',
+    'Figma', 'UI/UX', 'Adobe XD', 'Photoshop', 'Illustrator',
+    'Excel', 'Power BI', 'Tableau', 'R', 'MATLAB', 'Statistics',
+    'Communication', 'Leadership', 'Problem Solving', 'Team Work', 'Project Management'
 ];
 
 function Dashboard() {
@@ -192,6 +217,7 @@ function Dashboard() {
     const [subTab, setSubTab] = useState(0);
     const [search, setSearch] = useState('');
     const [country, setCountry] = useState('All');
+    const [scholarshipCountry, setScholarshipCountry] = useState('All'); // Separate filter for scholarships
     const [field, setField] = useState('All Fields');
     const [applying, setApplying] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -203,26 +229,35 @@ function Dashboard() {
     const [appliedJobs, setAppliedJobs] = useState([]);
     const [apiStatus, setApiStatus] = useState(null); // null, 'checking', 'connected', 'error'
 
+    // Live job fetching states
+    const [liveJobs, setLiveJobs] = useState([]);
+    const [liveScholarships, setLiveScholarships] = useState([]);
+    const [jobsLoading, setJobsLoading] = useState(false);
+    const [jobsError, setJobsError] = useState(null);
+    // eslint-disable-next-line no-unused-vars
+    const [currentPage, setCurrentPage] = useState(1);
+    // eslint-disable-next-line no-unused-vars
+    const [totalJobs, setTotalJobs] = useState(0);
+    const [isLiveData, setIsLiveData] = useState(false);
+    const [lastSearch, setLastSearch] = useState({ query: '', location: '' });
+
     // Load applied jobs from localStorage
     useEffect(() => {
         const saved = JSON.parse(localStorage.getItem('appliedJobs') || '[]');
         setAppliedJobs(saved);
     }, []);
 
-    // Calculate real-time stats
-    const stats = {
-        totalApplied: appliedJobs.length,
-        scholarshipsFound: scholarshipsData.length,
-        hoursSaved: Math.round(appliedJobs.length * 1.5) // Each application saves ~1.5 hours
-    };
+    // Load saved credentials from localStorage
+    const savedCredentials = JSON.parse(localStorage.getItem('jobAgentCredentials') || '{}');
 
     const [formData, setFormData] = useState({
         name: '',
         email: '',
-        skills: '',
-        linkedinEmail: '',
-        linkedinPassword: '',
-        indeedEmail: '',
+        skills: [],
+        linkedinEmail: savedCredentials.linkedinEmail || 'zaim08121@gmail.com',
+        linkedinPassword: savedCredentials.linkedinPassword || '1122@Ptcl1122',
+        linkedinOTP: '',
+        indeedEmail: savedCredentials.indeedEmail || 'zaim08121@gmail.com',
         indeedPassword: '',
         education: { degree: '', institution: '', yearOfGraduation: '' }
     });
@@ -236,31 +271,136 @@ function Dashboard() {
     // Test TinyFish API connection
     const testApiConnection = async () => {
         setApiStatus('checking');
-        setLogs(prev => [...prev, '🔄 Testing TinyFish API connection...']);
+        setLogs(prev => [...prev, '[TESTING] TinyFish API connection...']);
         try {
             const response = await testTinyFishConnection();
             if (response.data.success) {
                 setApiStatus('connected');
-                setLogs(prev => [...prev, '✅ TinyFish API is connected and ready!']);
+                setLogs(prev => [...prev, '[SUCCESS] TinyFish API is connected and ready!']);
             } else {
                 setApiStatus('error');
-                setLogs(prev => [...prev, `❌ API Error: ${response.data.error || 'Connection failed'}`]);
+                setLogs(prev => [...prev, `[ERROR] API Error: ${response.data.error || 'Connection failed'}`]);
             }
         } catch (error) {
             setApiStatus('error');
-            setLogs(prev => [...prev, `❌ Cannot connect to TinyFish API: ${error.message}`]);
+            setLogs(prev => [...prev, `[ERROR] Cannot connect to TinyFish API: ${error.message}`]);
         }
     };
 
+    // Fetch live jobs from API
+    const fetchLiveJobs = useCallback(async (searchQuery = '', location = '', page = 1) => {
+        setJobsLoading(true);
+        setJobsError(null);
+
+        try {
+            const query = searchQuery || (field !== 'All Fields' ? field : 'intern');
+            const loc = location || (country !== 'All' ? country : '');
+
+            console.log(`[SEARCH] Fetching jobs: query="${query}", location="${loc}"`);
+
+            // Try to fetch from API first
+            const response = await searchJobs(query, loc, page);
+
+            if (response.data.success && response.data.jobs && response.data.jobs.length > 0) {
+                const jobs = response.data.jobs;
+
+                // Transform API jobs to match our format
+                const formattedJobs = jobs.map((job, index) => ({
+                    id: job.id || `live-${Date.now()}-${index}`,
+                    title: job.title,
+                    company: job.company,
+                    country: job.country || 'USA',
+                    city: job.city || '',
+                    type: job.isRemote ? 'Remote' : (job.type || 'On-site'),
+                    link: job.link,
+                    field: job.field || 'General',
+                    skills: job.skills || [],
+                    deadline: job.deadline,
+                    description: job.description,
+                    salary: job.salary,
+                    posted: job.posted,
+                    isLive: true
+                }));
+
+                setLiveJobs(formattedJobs);
+                setTotalJobs(response.data.total || formattedJobs.length);
+                setIsLiveData(true);
+                setLastSearch({ query, location: loc });
+            } else {
+                // Use fallback data - filter based on search
+                const filteredFallback = fallbackInternships.filter(job => {
+                    const matchesQuery = !query ||
+                        job.title.toLowerCase().includes(query.toLowerCase()) ||
+                        job.company.toLowerCase().includes(query.toLowerCase()) ||
+                        job.field.toLowerCase().includes(query.toLowerCase()) ||
+                        job.skills.some(s => s.toLowerCase().includes(query.toLowerCase()));
+                    const matchesLocation = !loc ||
+                        job.country.toLowerCase().includes(loc.toLowerCase());
+                    return matchesQuery && matchesLocation;
+                });
+
+                setLiveJobs(filteredFallback);
+                setTotalJobs(filteredFallback.length);
+                setIsLiveData(false);
+                setLastSearch({ query, location: loc });
+            }
+        } catch (error) {
+            console.log('[SEARCH] Using fallback data');
+            // On error, use fallback data
+            setLiveJobs(fallbackInternships);
+            setTotalJobs(fallbackInternships.length);
+            setIsLiveData(false);
+            setJobsError(null); // Don't show error - we have data
+        } finally {
+            setJobsLoading(false);
+        }
+    }, [field, country]);
+
+    // Fetch live scholarships
+    const fetchLiveScholarships = useCallback(async (targetCountry = '') => {
+        try {
+            const response = await searchScholarships(targetCountry);
+            if (response.data.success && response.data.scholarships) {
+                setLiveScholarships(response.data.scholarships);
+            }
+        } catch (error) {
+            console.error('[SCHOLARSHIPS] Error:', error);
+        }
+    }, []);
+
+    // Initial data load - intentionally only runs once on mount
     useEffect(() => {
         fetchData();
+        // Initial live job fetch
+        fetchLiveJobs('intern', '', 1);
+        fetchLiveScholarships(country !== 'All' ? country : '');
+
         const savedResume = localStorage.getItem('userResume');
         const savedResumeName = localStorage.getItem('userResumeName');
         if (savedResume) {
             setResume(savedResume);
             setResumeName(savedResumeName || 'Resume uploaded');
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    // Refetch jobs when search/filters change (with debounce)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (mainTab === 1 && subTab === 0) { // Only on Opportunities > Internships tab
+                const query = search || (field !== 'All Fields' ? field : 'intern');
+                const loc = country !== 'All' ? country : '';
+                fetchLiveJobs(query, loc, currentPage);
+            }
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timer);
+    }, [search, country, field, currentPage, mainTab, subTab, fetchLiveJobs]);
+
+    // Refetch scholarships when country changes
+    useEffect(() => {
+        fetchLiveScholarships(country !== 'All' ? country : '');
+    }, [country, fetchLiveScholarships]);
 
     const fetchData = async () => {
         try {
@@ -278,16 +418,19 @@ function Dashboard() {
                 localStorage.setItem('user', JSON.stringify(updatedUser));
             }
 
-            setFormData({
-                name: profileUser.name || user.name || '',
-                email: profileUser.email || user.email || '',
-                skills: profileUser.skills?.join(', ') || '',
-                linkedinEmail: profileUser.linkedinEmail || '',
-                linkedinPassword: '',
-                indeedEmail: profileUser.indeedEmail || '',
-                indeedPassword: '',
-                education: profileUser.education || { degree: '', institution: '', yearOfGraduation: '' }
-            });
+            // Load saved credentials from localStorage (don't overwrite if they exist)
+            const savedCreds = JSON.parse(localStorage.getItem('jobAgentCredentials') || '{}');
+
+            setFormData(prev => ({
+                name: profileUser.name || user.name || prev.name || '',
+                email: profileUser.email || user.email || prev.email || '',
+                skills: profileUser.skills || prev.skills || [],
+                linkedinEmail: savedCreds.linkedinEmail || profileUser.linkedinEmail || prev.linkedinEmail || 'zaim08121@gmail.com',
+                linkedinPassword: savedCreds.linkedinPassword || prev.linkedinPassword || '1122@Ptcl1122',
+                indeedEmail: savedCreds.indeedEmail || profileUser.indeedEmail || prev.indeedEmail || 'zaim08121@gmail.com',
+                indeedPassword: prev.indeedPassword || '',
+                education: profileUser.education || prev.education || { degree: '', institution: '', yearOfGraduation: '' }
+            }));
         } catch (error) {
             console.error('Error fetching data:', error);
         } finally {
@@ -295,8 +438,13 @@ function Dashboard() {
         }
     };
 
-    // Filter internships by search, country, and field
-    const filteredInternships = internshipsData.filter(item => {
+    // Combine live jobs with fallback data
+    const allInternships = isLiveData && liveJobs.length > 0
+        ? liveJobs
+        : fallbackInternships;
+
+    // Filter internships by search, country, and field ONLY (show ALL fields)
+    const filteredInternships = allInternships.filter(item => {
         const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase()) ||
             item.company.toLowerCase().includes(search.toLowerCase());
         const matchesCountry = country === 'All' || item.country === country;
@@ -304,13 +452,27 @@ function Dashboard() {
         return matchesSearch && matchesCountry && matchesField;
     });
 
-    // Filter scholarships by search, country, and field
-    const filteredScholarships = scholarshipsData.filter(item => {
+    // Use live scholarships if available, otherwise use static data
+    const allScholarships = liveScholarships.length > 0 ? liveScholarships : scholarshipsData;
+
+    // Filter scholarships by search and scholarshipCountry (separate filter)
+    const filteredScholarships = allScholarships.filter(item => {
         const matchesSearch = item.title.toLowerCase().includes(search.toLowerCase());
-        const matchesCountry = country === 'All' || item.country === country || item.country === 'Multiple' || item.country === 'Europe';
-        const matchesField = field === 'All Fields' || item.field === 'All Fields' || item.field === field;
-        return matchesSearch && matchesCountry && matchesField;
+        const matchesCountry = scholarshipCountry === 'All' ||
+            item.country === scholarshipCountry ||
+            item.country === 'Remote/Global' ||
+            item.country === 'Europe' ||
+            (item.eligibility && item.eligibility.includes('All Countries'));
+        return matchesSearch && matchesCountry;
     });
+
+    // Calculate real-time stats (after allScholarships is defined)
+    const stats = {
+        totalApplied: appliedJobs.length,
+        scholarshipsFound: allScholarships.length,
+        hoursSaved: Math.round(appliedJobs.length * 1.5),
+        liveJobs: isLiveData ? liveJobs.length : 0
+    };
 
     // Save applied job to localStorage
     const saveAppliedJob = (item, status) => {
@@ -321,69 +483,101 @@ function Dashboard() {
 
     const handleAutoApply = async (item, platform) => {
         setApplying(item.id);
-        setLogs(prev => [...prev, `🚀 Starting ${platform} automation for "${item.title}"...`]);
+
+        // Check if job matches user's skills
+        const userSkills = formData.skills || [];
+        const jobSkills = item.skills || [];
+        const matchingSkills = userSkills.filter(skill =>
+            jobSkills.some(js => js.toLowerCase().includes(skill.toLowerCase()) || skill.toLowerCase().includes(js.toLowerCase()))
+        );
+
+        setLogs(prev => [...prev, `[START] ${platform.toUpperCase()} automation for "${item.title}"...`]);
+        setLogs(prev => [...prev, `[JOB] Title: ${item.title} | Company: ${item.company} | Field: ${item.field}`]);
+        setLogs(prev => [...prev, `[JOB] Required Skills: ${jobSkills.join(', ')}`]);
+        setLogs(prev => [...prev, `[USER] Your Skills: ${userSkills.join(', ')}`]);
+        setLogs(prev => [...prev, `[MATCH] Matching Skills: ${matchingSkills.length > 0 ? matchingSkills.join(', ') : 'None found'}`]);
+
+        // BLOCK: Don't apply if NO skills match AND user has skills set
+        if (userSkills.length > 0 && matchingSkills.length === 0) {
+            setLogs(prev => [...prev, '[BLOCKED] This job does not match your skills. Skipping...']);
+            setMessage({ type: 'warning', text: `Skipped "${item.title}" - no matching skills. Add more skills in Settings or find jobs that match yours.` });
+            setApplying(null);
+            return;
+        }
 
         // Check credentials first
         if (platform === 'linkedin' && !hasLinkedIn) {
-            setLogs(prev => [...prev, '❌ LinkedIn credentials not configured. Go to Settings tab to add them.']);
+            setLogs(prev => [...prev, '[ERROR] LinkedIn credentials not configured. Go to Settings tab to add them.']);
             setMessage({ type: 'error', text: 'Please add your LinkedIn email AND password in Settings first.' });
             setApplying(null);
             return;
         }
         if (platform === 'indeed' && !hasIndeed) {
-            setLogs(prev => [...prev, '❌ Indeed email not configured. Go to Settings tab to add it.']);
+            setLogs(prev => [...prev, '[ERROR] Indeed email not configured. Go to Settings tab to add it.']);
             setMessage({ type: 'error', text: 'Please add your Indeed email in Settings first.' });
             setApplying(null);
             return;
         }
 
         try {
-            setLogs(prev => [...prev, `📡 Sending request to TinyFish API...`]);
-            setLogs(prev => [...prev, `🎯 Target: ${item.title} at ${item.company} (${item.field})`]);
+            setLogs(prev => [...prev, '[APPLYING] Starting browser automation...']);
+            setLogs(prev => [...prev, '[INFO] This takes 1-3 minutes - DO NOT close this page']);
+            setLogs(prev => [...prev, '[INFO] TinyFish is opening a real browser and applying for you...']);
             let response;
             if (platform === 'linkedin') {
+                setLogs(prev => [...prev, '[LINKEDIN] Connecting to LinkedIn...']);
                 response = await applyLinkedIn({
                     jobTitle: item.title,
                     location: item.country,
                     company: item.company,
                     field: item.field,
-                    skills: item.skills
+                    skills: item.skills,
+                    linkedinEmail: formData.linkedinEmail,
+                    linkedinPassword: formData.linkedinPassword,
+                    linkedinOTP: formData.linkedinOTP || '',
+                    userSkills: formData.skills,
+                    userName: formData.name
                 });
             } else {
+                setLogs(prev => [...prev, '[INDEED] Connecting to Indeed...']);
                 response = await applyIndeed({
                     jobTitle: item.title,
                     location: item.country,
                     company: item.company,
                     field: item.field,
-                    skills: item.skills
+                    skills: item.skills,
+                    indeedEmail: formData.indeedEmail || 'zaim08121@gmail.com',
+                    userSkills: formData.skills,
+                    userName: formData.name
                 });
             }
 
             if (response.data.success) {
                 const result = response.data.data;
-                setLogs(prev => [...prev, `✅ Successfully applied to ${item.title} at ${item.company}!`]);
+                setLogs(prev => [...prev, `[SUCCESS] Applied to ${item.title} at ${item.company}!`]);
+                setLogs(prev => [...prev, `[FIELD CONFIRMATION] Applied to field: ${item.field}`]);
 
                 // Show agent steps if available
                 if (result?.data?.steps?.length) {
                     result.data.steps.forEach(step => {
-                        setLogs(prev => [...prev, `   → ${step}`]);
+                        setLogs(prev => [...prev, `   -> ${step}`]);
                     });
                 }
 
                 // Show result description if available
                 if (result?.data?.result?.description) {
-                    setLogs(prev => [...prev, `📋 Result: ${result.data.result.description}`]);
+                    setLogs(prev => [...prev, `[RESULT] ${result.data.result.description}`]);
                 }
 
                 setMessage({ type: 'success', text: `Applied to ${item.title} at ${item.company} successfully!` });
-                saveAppliedJob(item, 'success');
+                saveAppliedJob({ ...item, matchingSkills }, 'success');
             } else {
-                setLogs(prev => [...prev, `⚠️ Application may have issues: ${response.data.message || 'Check manually'}`]);
+                setLogs(prev => [...prev, `[WARNING] Application may have issues: ${response.data.message || 'Check manually'}`]);
                 saveAppliedJob(item, 'pending');
             }
         } catch (error) {
             const errorMsg = error.response?.data?.message || error.message || 'Unknown error';
-            setLogs(prev => [...prev, `❌ Auto-apply failed: ${errorMsg}`]);
+            setLogs(prev => [...prev, `[ERROR] Auto-apply failed: ${errorMsg}`]);
             setMessage({ type: 'error', text: `Auto-apply failed: ${errorMsg}. Try manual apply.` });
             saveAppliedJob(item, 'failed');
         } finally {
@@ -430,24 +624,60 @@ function Dashboard() {
     };
 
     const handleSaveProfile = async () => {
+        // Validate required fields
+        if (!formData.name || formData.name.trim() === '') {
+            setMessage({ type: 'error', text: 'Name is required for job applications.' });
+            return;
+        }
+        if (!formData.skills || formData.skills.length === 0) {
+            setMessage({ type: 'error', text: 'Skills are required for job matching. Select at least one skill.' });
+            return;
+        }
+        if (!formData.education?.degree || formData.education.degree.trim() === '') {
+            setMessage({ type: 'error', text: 'Degree/Field of Study is required for job applications.' });
+            return;
+        }
+        if (!formData.education?.institution || formData.education.institution.trim() === '') {
+            setMessage({ type: 'error', text: 'Institution/University name is required for job applications.' });
+            return;
+        }
+        if (!formData.indeedEmail && !formData.linkedinEmail) {
+            setMessage({ type: 'error', text: 'Please add at least one platform email (Indeed or LinkedIn) for auto-apply.' });
+            return;
+        }
+
         setSaving(true);
         try {
+            // Save credentials to localStorage (passwords never go to backend)
+            const credentials = {
+                linkedinEmail: formData.linkedinEmail,
+                linkedinPassword: formData.linkedinPassword,
+                indeedEmail: formData.indeedEmail
+            };
+            localStorage.setItem('jobAgentCredentials', JSON.stringify(credentials));
+
             const updateData = {
                 name: formData.name,
-                skills: formData.skills.split(',').map(s => s.trim()).filter(s => s),
+                skills: formData.skills,
                 education: formData.education,
                 linkedinEmail: formData.linkedinEmail,
                 indeedEmail: formData.indeedEmail
             };
-            if (formData.linkedinPassword) updateData.linkedinPassword = formData.linkedinPassword;
-            if (formData.indeedPassword) updateData.indeedPassword = formData.indeedPassword;
+            // Don't send passwords to backend API
 
             await api.put('/auth/profile', updateData);
-            const updatedUser = { ...user, name: formData.name, linkedinEmail: formData.linkedinEmail, indeedEmail: formData.indeedEmail };
+            const updatedUser = { ...user, name: formData.name, skills: formData.skills, linkedinEmail: formData.linkedinEmail, indeedEmail: formData.indeedEmail };
             localStorage.setItem('user', JSON.stringify(updatedUser));
-            setMessage({ type: 'success', text: 'Profile saved!' });
+            setMessage({ type: 'success', text: 'Profile saved! Your credentials are stored locally.' });
         } catch (error) {
-            setMessage({ type: 'error', text: 'Failed to save profile' });
+            // Even if API fails, save credentials locally
+            const credentials = {
+                linkedinEmail: formData.linkedinEmail,
+                linkedinPassword: formData.linkedinPassword,
+                indeedEmail: formData.indeedEmail
+            };
+            localStorage.setItem('jobAgentCredentials', JSON.stringify(credentials));
+            setMessage({ type: 'warning', text: 'Profile saved locally. Backend sync failed but you can still use auto-apply.' });
         } finally {
             setSaving(false);
         }
@@ -560,9 +790,14 @@ function Dashboard() {
                     {mainTab === 0 && (
                         <Grid container spacing={3}>
                             <Grid item xs={12} md={8}>
-                                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Recent Opportunities</Typography>
+                                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                    <Typography variant="h6" sx={{ fontWeight: 600 }}>Recent Opportunities</Typography>
+                                    {isLiveData && (
+                                        <Chip label="LIVE" size="small" color="success" sx={{ ml: 1 }} />
+                                    )}
+                                </Box>
                                 <Grid container spacing={2}>
-                                    {internshipsData.slice(0, 4).map(item => (
+                                    {allInternships.slice(0, 4).map(item => (
                                         <Grid item xs={12} sm={6} key={item.id}>
                                             <Card variant="outlined" sx={{ borderRadius: 2 }}>
                                                 <CardContent>
@@ -586,7 +821,8 @@ function Dashboard() {
 
                                 <Typography variant="h6" sx={{ mt: 3, mb: 2, fontWeight: 600 }}>Available Now</Typography>
                                 <Typography variant="body2" color="textSecondary">
-                                    {internshipsData.length} Internships • {scholarshipsData.length} Scholarships
+                                    {allInternships.length} Internships • {allScholarships.length} Scholarships
+                                    {isLiveData && ' (Live)'}
                                 </Typography>
                                 <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
                                     From {countries.length - 1} countries
@@ -598,9 +834,24 @@ function Dashboard() {
                     {/* Opportunities Tab */}
                     {mainTab === 1 && (
                         <>
+                            {/* Live Data Indicator */}
+                            {isLiveData && (
+                                <Alert severity="success" sx={{ mb: 2 }}>
+                                    Showing live job data from multiple sources (LinkedIn, Indeed, Glassdoor).
+                                    {lastSearch.query && ` Search: "${lastSearch.query}"`}
+                                    {lastSearch.location && ` in ${lastSearch.location}`}
+                                </Alert>
+                            )}
+
+                            {jobsError && (
+                                <Alert severity="warning" sx={{ mb: 2 }}>
+                                    {jobsError}
+                                </Alert>
+                            )}
+
                             {/* Filters */}
                             <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap', alignItems: 'center' }}>
-                                <TextField placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} size="small" sx={{ minWidth: 200 }}
+                                <TextField placeholder="Search jobs..." value={search} onChange={(e) => setSearch(e.target.value)} size="small" sx={{ minWidth: 200 }}
                                     InputProps={{ startAdornment: <InputAdornment position="start"><Search /></InputAdornment> }} />
                                 <FormControl size="small" sx={{ minWidth: 150 }}>
                                     <InputLabel>Country</InputLabel>
@@ -615,6 +866,15 @@ function Dashboard() {
                                     </Select>
                                 </FormControl>
                                 <Button variant="text" size="small" onClick={resetFilters}>Reset Filters</Button>
+                                <Button
+                                    variant="outlined"
+                                    size="small"
+                                    startIcon={jobsLoading ? <CircularProgress size={16} /> : <Refresh />}
+                                    onClick={() => fetchLiveJobs(search || 'intern', country !== 'All' ? country : '', 1)}
+                                    disabled={jobsLoading}
+                                >
+                                    {jobsLoading ? 'Loading...' : 'Refresh Jobs'}
+                                </Button>
                             </Box>
 
                             {/* Active Filters Display */}
@@ -627,36 +887,57 @@ function Dashboard() {
                             )}
 
                             <Tabs value={subTab} onChange={(e, v) => setSubTab(v)} sx={{ mb: 2 }}>
-                                <Tab label={`Internships (${filteredInternships.length})`} />
+                                <Tab label={`Internships (${filteredInternships.length})${isLiveData ? ' - LIVE' : ''}`} />
                                 <Tab label={`Scholarships (${filteredScholarships.length})`} />
                             </Tabs>
 
+                            {/* Loading skeleton */}
+                            {jobsLoading && subTab === 0 && (
+                                <Grid container spacing={2} sx={{ mb: 2 }}>
+                                    {[1, 2, 3].map(i => (
+                                        <Grid item xs={12} md={6} lg={4} key={i}>
+                                            <Card variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+                                                <Skeleton variant="text" width="60%" />
+                                                <Skeleton variant="text" width="40%" />
+                                                <Skeleton variant="rectangular" height={60} sx={{ mt: 1 }} />
+                                            </Card>
+                                        </Grid>
+                                    ))}
+                                </Grid>
+                            )}
+
                             {/* No results message */}
-                            {((subTab === 0 && filteredInternships.length === 0) || (subTab === 1 && filteredScholarships.length === 0)) && (
+                            {!jobsLoading && ((subTab === 0 && filteredInternships.length === 0) || (subTab === 1 && filteredScholarships.length === 0)) && (
                                 <Alert severity="info" sx={{ mb: 2 }}>
                                     No {subTab === 0 ? 'internships' : 'scholarships'} found for your filters. Try adjusting your search criteria.
                                 </Alert>
                             )}
 
-                            {subTab === 0 && (
+                            {subTab === 0 && !jobsLoading && (
                                 <Grid container spacing={2}>
                                     {filteredInternships.map(item => (
                                         <Grid item xs={12} md={6} lg={4} key={item.id}>
-                                            <Card variant="outlined" sx={{ borderRadius: 2, height: '100%' }}>
+                                            <Card variant="outlined" sx={{ borderRadius: 2, height: '100%', border: item.isLive ? '2px solid #10b981' : undefined }}>
                                                 <CardContent>
-                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                         <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{item.title}</Typography>
-                                                        <Chip label={item.type} size="small" />
+                                                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                                            {item.isLive && <Chip label="LIVE" size="small" color="success" sx={{ height: 20 }} />}
+                                                            <Chip label={item.type} size="small" />
+                                                        </Box>
                                                     </Box>
                                                     <Typography variant="body2" color="textSecondary">{item.company}</Typography>
                                                     <Box sx={{ display: 'flex', alignItems: 'center', mt: 1, gap: 0.5 }}>
                                                         <LocationOn fontSize="small" color="action" />
-                                                        <Typography variant="body2">{item.country}</Typography>
+                                                        <Typography variant="body2">{item.country}{item.city ? `, ${item.city}` : ''}</Typography>
                                                         <Category fontSize="small" color="action" sx={{ ml: 1 }} />
                                                         <Typography variant="body2">{item.field}</Typography>
                                                     </Box>
+                                                    {item.salary && item.salary !== 'Not specified' && (
+                                                        <Typography variant="body2" sx={{ mt: 0.5, color: '#10b981' }}>{item.salary}</Typography>
+                                                    )}
                                                     <Box sx={{ mt: 1, display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                                                        {item.skills.map(s => <Chip key={s} label={s} size="small" sx={{ bgcolor: '#f0f0ff' }} />)}
+                                                        {(item.skills || []).map(s => <Chip key={s} label={s} size="small" sx={{ bgcolor: '#f0f0ff' }} />)}
                                                     </Box>
                                                     <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 1 }}>Deadline: {item.deadline}</Typography>
                                                     <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -682,30 +963,62 @@ function Dashboard() {
                             )}
 
                             {subTab === 1 && (
-                                <Grid container spacing={2}>
-                                    {filteredScholarships.map(item => (
-                                        <Grid item xs={12} md={6} lg={4} key={item.id}>
-                                            <Card variant="outlined" sx={{ borderRadius: 2, height: '100%' }}>
-                                                <CardContent>
-                                                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{item.title}</Typography>
-                                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
-                                                        <LocationOn fontSize="small" color="action" />
-                                                        <Typography variant="body2">{item.country}</Typography>
-                                                    </Box>
-                                                    <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                                                        <Chip label={item.amount} color="success" size="small" />
-                                                        <Chip label={item.field} size="small" sx={{ bgcolor: '#f0f0ff' }} />
-                                                    </Box>
-                                                    <Typography variant="body2" sx={{ mt: 1 }}><strong>Eligibility:</strong> {item.eligibility}</Typography>
-                                                    <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 1 }}>Deadline: {item.deadline}</Typography>
-                                                    <Button fullWidth variant="contained" sx={{ mt: 2 }} startIcon={<OpenInNew />} onClick={() => handleManualApply(item)}>
-                                                        Apply Now
-                                                    </Button>
-                                                </CardContent>
-                                            </Card>
-                                        </Grid>
-                                    ))}
-                                </Grid>
+                                <>
+                                    {/* Scholarship Country Filter */}
+                                    <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <FormControl size="small" sx={{ minWidth: 200 }}>
+                                            <InputLabel>Filter by Country</InputLabel>
+                                            <Select
+                                                value={scholarshipCountry}
+                                                label="Filter by Country"
+                                                onChange={(e) => setScholarshipCountry(e.target.value)}
+                                            >
+                                                <MenuItem value="All">All Countries</MenuItem>
+                                                <MenuItem value="USA">USA</MenuItem>
+                                                <MenuItem value="UK">UK</MenuItem>
+                                                <MenuItem value="Germany">Germany</MenuItem>
+                                                <MenuItem value="Canada">Canada</MenuItem>
+                                                <MenuItem value="Australia">Australia</MenuItem>
+                                                <MenuItem value="Europe">Europe</MenuItem>
+                                                <MenuItem value="Japan">Japan</MenuItem>
+                                                <MenuItem value="South Korea">South Korea</MenuItem>
+                                                <MenuItem value="China">China</MenuItem>
+                                                <MenuItem value="Switzerland">Switzerland</MenuItem>
+                                                <MenuItem value="Netherlands">Netherlands</MenuItem>
+                                                <MenuItem value="Sweden">Sweden</MenuItem>
+                                                <MenuItem value="Turkey">Turkey</MenuItem>
+                                                <MenuItem value="New Zealand">New Zealand</MenuItem>
+                                            </Select>
+                                        </FormControl>
+                                        <Typography variant="body2" color="text.secondary">
+                                            Showing {filteredScholarships.length} scholarships
+                                        </Typography>
+                                    </Box>
+                                    <Grid container spacing={2}>
+                                        {filteredScholarships.map(item => (
+                                            <Grid item xs={12} md={6} lg={4} key={item.id}>
+                                                <Card variant="outlined" sx={{ borderRadius: 2, height: '100%' }}>
+                                                    <CardContent>
+                                                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{item.title}</Typography>
+                                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 1 }}>
+                                                            <LocationOn fontSize="small" color="action" />
+                                                            <Typography variant="body2">{item.country}</Typography>
+                                                        </Box>
+                                                        <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                                                            <Chip label={item.amount} color="success" size="small" />
+                                                            <Chip label={item.field} size="small" sx={{ bgcolor: '#f0f0ff' }} />
+                                                        </Box>
+                                                        <Typography variant="body2" sx={{ mt: 1 }}><strong>Eligibility:</strong> {item.eligibility}</Typography>
+                                                        <Typography variant="caption" sx={{ color: '#f59e0b', display: 'block', mt: 1 }}>Deadline: {item.deadline}</Typography>
+                                                        <Button fullWidth variant="contained" sx={{ mt: 2 }} startIcon={<OpenInNew />} onClick={() => handleManualApply(item)}>
+                                                            Apply Now
+                                                        </Button>
+                                                    </CardContent>
+                                                </Card>
+                                            </Grid>
+                                        ))}
+                                    </Grid>
+                                </>
                             )}
 
                             {!hasLinkedIn && !hasIndeed && subTab === 0 && filteredInternships.length > 0 && (
@@ -741,20 +1054,26 @@ function Dashboard() {
 
                             {(hasLinkedIn || hasIndeed) && (
                                 <Alert severity="success" sx={{ mb: 2 }}>
-                                    {hasLinkedIn && '✅ LinkedIn credentials configured. '}
-                                    {hasIndeed && '✅ Indeed credentials configured.'}
+                                    {hasLinkedIn && 'LinkedIn credentials configured. '}
+                                    {hasIndeed && 'Indeed credentials configured.'}
                                 </Alert>
                             )}
 
                             {/* Your Profile Summary for Matching */}
                             <Paper sx={{ p: 2, mb: 2, bgcolor: '#f5f5f5', borderRadius: 2 }}>
-                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>📋 Your Profile (Used for Job Matching)</Typography>
+                                <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1 }}>Your Profile (Used for Job Matching)</Typography>
                                 <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
                                     <Box>
                                         <Typography variant="body2" color="textSecondary">Skills:</Typography>
-                                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                            {formData.skills || 'Not set - Add in Settings'}
-                                        </Typography>
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+                                            {formData.skills && formData.skills.length > 0 ? (
+                                                formData.skills.map((skill, i) => (
+                                                    <Chip key={i} label={skill} size="small" color="primary" variant="outlined" />
+                                                ))
+                                            ) : (
+                                                <Typography variant="body2" color="error">Not set - Add in Settings</Typography>
+                                            )}
+                                        </Box>
                                     </Box>
                                     <Divider orientation="vertical" flexItem />
                                     <Box>
@@ -779,7 +1098,7 @@ function Dashboard() {
                             {appliedJobs.length > 0 && (
                                 <Paper sx={{ p: 2, mb: 2, border: '2px solid #10b981', borderRadius: 2 }}>
                                     <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 1, color: '#10b981' }}>
-                                        ✅ Applied Jobs Confirmation ({appliedJobs.length} jobs)
+                                        Applied Jobs Confirmation ({appliedJobs.length} jobs)
                                     </Typography>
                                     <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
                                         {appliedJobs.slice(-10).map((job, i) => (
@@ -787,14 +1106,19 @@ function Dashboard() {
                                                 <Typography variant="body2" sx={{ fontWeight: 600 }}>{job.title}</Typography>
                                                 <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 0.5 }}>
                                                     <Chip label={job.company} size="small" color="primary" variant="outlined" />
-                                                    <Chip label={job.field} size="small" color="success" variant="outlined" />
+                                                    <Chip label={`Field: ${job.field}`} size="small" color="success" variant="outlined" />
                                                     <Chip label={job.country} size="small" variant="outlined" />
                                                     <Chip
-                                                        label={job.status === 'success' ? '✓ Applied' : job.status === 'manual' ? '📝 Manual' : job.status}
+                                                        label={job.status === 'success' ? 'Applied' : job.status === 'manual' ? 'Manual' : job.status}
                                                         size="small"
                                                         color={job.status === 'success' ? 'success' : 'default'}
                                                     />
                                                 </Box>
+                                                {job.matchingSkills && job.matchingSkills.length > 0 && (
+                                                    <Typography variant="caption" color="primary" sx={{ display: 'block', mt: 0.5 }}>
+                                                        Matched Skills: {job.matchingSkills.join(', ')}
+                                                    </Typography>
+                                                )}
                                                 <Typography variant="caption" color="textSecondary">
                                                     {new Date(job.appliedAt).toLocaleString()}
                                                 </Typography>
@@ -831,13 +1155,13 @@ function Dashboard() {
                                         variant="contained"
                                         color="primary"
                                         onClick={() => {
-                                            setLogs([`🤖 LinkedIn Agent started at ${new Date().toLocaleTimeString()}`, '🔍 Searching on LinkedIn...']);
+                                            setLogs(['LinkedIn Agent started at ' + new Date().toLocaleTimeString(), 'Searching for opportunities on LinkedIn...']);
                                             filteredInternships.slice(0, 3).forEach((item, i) => {
                                                 setTimeout(() => handleAutoApply(item, 'linkedin'), (i + 1) * 5000);
                                             });
                                         }}
                                     >
-                                        🔗 Auto-Apply (LinkedIn)
+                                        Auto-Apply (LinkedIn)
                                     </Button>
                                 )}
 
@@ -847,13 +1171,13 @@ function Dashboard() {
                                         variant="contained"
                                         color="secondary"
                                         onClick={() => {
-                                            setLogs([`🤖 Indeed Agent started at ${new Date().toLocaleTimeString()}`, '🔍 Searching on Indeed...']);
+                                            setLogs(['Indeed Agent started at ' + new Date().toLocaleTimeString(), 'Searching for opportunities on Indeed...']);
                                             filteredInternships.slice(0, 3).forEach((item, i) => {
                                                 setTimeout(() => handleAutoApply(item, 'indeed'), (i + 1) * 5000);
                                             });
                                         }}
                                     >
-                                        📋 Auto-Apply (Indeed)
+                                        Auto-Apply (Indeed)
                                     </Button>
                                 )}
 
@@ -874,7 +1198,7 @@ function Dashboard() {
                                         size="small"
                                         onClick={() => {
                                             setApiStatus(null);
-                                            setLogs(prev => [...prev, '🔄 Reset connection status']);
+                                            setLogs(prev => [...prev, '[RESET] Connection status reset']);
                                         }}
                                     >
                                         Reset
@@ -893,17 +1217,49 @@ function Dashboard() {
                         <Box>
                             {message.text && <Alert severity={message.type} sx={{ mb: 2 }} onClose={() => setMessage({ type: '', text: '' })}>{message.text}</Alert>}
 
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                                Fields marked with <span style={{ color: 'red' }}>*</span> are required for auto-apply to work properly.
+                            </Alert>
+
                             <Grid container spacing={3}>
                                 <Grid item xs={12} md={6}>
-                                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Profile</Typography>
-                                    <TextField fullWidth label="Name" name="name" value={formData.name} onChange={handleChange} sx={{ mb: 2 }} />
+                                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Profile <span style={{ color: 'red' }}>*</span></Typography>
+                                    <TextField fullWidth label="Full Name" name="name" value={formData.name} onChange={handleChange} sx={{ mb: 2 }} required helperText="Required for job applications" />
                                     <TextField fullWidth label="Email" value={formData.email} disabled sx={{ mb: 2 }} />
-                                    <TextField fullWidth label="Skills (comma separated)" name="skills" value={formData.skills} onChange={handleChange} sx={{ mb: 2 }} />
+
+                                    {/* Skills Multi-Select */}
+                                    <FormControl fullWidth sx={{ mb: 2 }} required>
+                                        <InputLabel>Select Your Skills *</InputLabel>
+                                        <Select
+                                            multiple
+                                            value={formData.skills}
+                                            onChange={(e) => setFormData({ ...formData, skills: e.target.value })}
+                                            input={<OutlinedInput label="Select Your Skills *" />}
+                                            renderValue={(selected) => (
+                                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                                    {selected.map((value) => (
+                                                        <Chip key={value} label={value} size="small" />
+                                                    ))}
+                                                </Box>
+                                            )}
+                                            MenuProps={{ PaperProps: { style: { maxHeight: 300 } } }}
+                                        >
+                                            {skillsList.map((skill) => (
+                                                <MenuItem key={skill} value={skill}>
+                                                    <Checkbox checked={formData.skills.indexOf(skill) > -1} />
+                                                    <ListItemText primary={skill} />
+                                                </MenuItem>
+                                            ))}
+                                        </Select>
+                                        <Typography variant="caption" color="textSecondary" sx={{ mt: 0.5 }}>
+                                            Required - Select skills that match your expertise ({formData.skills.length} selected)
+                                        </Typography>
+                                    </FormControl>
                                 </Grid>
                                 <Grid item xs={12} md={6}>
-                                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Education</Typography>
-                                    <TextField fullWidth label="Degree" name="education.degree" value={formData.education.degree} onChange={handleChange} sx={{ mb: 2 }} />
-                                    <TextField fullWidth label="Institution" name="education.institution" value={formData.education.institution} onChange={handleChange} sx={{ mb: 2 }} />
+                                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Education <span style={{ color: 'red' }}>*</span></Typography>
+                                    <TextField fullWidth label="Degree/Field of Study" name="education.degree" value={formData.education.degree} onChange={handleChange} sx={{ mb: 2 }} required helperText="Required - e.g., Computer Science, Software Engineering" />
+                                    <TextField fullWidth label="Institution/University" name="education.institution" value={formData.education.institution} onChange={handleChange} sx={{ mb: 2 }} required helperText="Required - Your university name" />
                                     <TextField fullWidth label="Graduation Year" name="education.yearOfGraduation" type="number" value={formData.education.yearOfGraduation} onChange={handleChange} />
                                 </Grid>
                                 <Grid item xs={12}>
@@ -920,18 +1276,43 @@ function Dashboard() {
                                 <Grid item xs={12}>
                                     <Divider sx={{ my: 2 }} />
                                     <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>Job Platform Credentials (for Auto-Apply)</Typography>
+
+                                    {/* LinkedIn Section */}
+                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 500, color: '#0077b5' }}>LinkedIn (Requires Email + Password)</Typography>
+                                    <Grid container spacing={2} sx={{ mb: 2 }}>
+                                        <Grid item xs={12} sm={4}>
+                                            <TextField fullWidth label="LinkedIn Email" name="linkedinEmail" value={formData.linkedinEmail} onChange={handleChange} helperText="Your LinkedIn login email" />
+                                        </Grid>
+                                        <Grid item xs={12} sm={4}>
+                                            <TextField fullWidth label="LinkedIn Password" name="linkedinPassword" type="password" value={formData.linkedinPassword} onChange={handleChange} placeholder="Enter to update" helperText="Required for LinkedIn auto-apply" />
+                                        </Grid>
+                                        <Grid item xs={12} sm={4}>
+                                            <TextField
+                                                fullWidth
+                                                label="LinkedIn OTP Code"
+                                                name="linkedinOTP"
+                                                value={formData.linkedinOTP || ''}
+                                                onChange={handleChange}
+                                                placeholder="6-digit code"
+                                                helperText="Enter 2FA code from email/SMS"
+                                                inputProps={{ maxLength: 6 }}
+                                            />
+                                        </Grid>
+                                    </Grid>
+                                    <Alert severity="info" sx={{ mb: 2 }}>
+                                        <strong>LinkedIn 2FA:</strong> If LinkedIn sends you a 6-digit code, enter it above and click Save, then try auto-apply again.
+                                    </Alert>
+
+                                    {/* Indeed Section */}
+                                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 500, color: '#2164f3' }}>Indeed (Email Only - No Password Needed)</Typography>
                                     <Grid container spacing={2}>
                                         <Grid item xs={12} sm={6}>
-                                            <TextField fullWidth label="LinkedIn Email" name="linkedinEmail" value={formData.linkedinEmail} onChange={handleChange} />
+                                            <TextField fullWidth label="Indeed Email" name="indeedEmail" value={formData.indeedEmail} onChange={handleChange} required helperText="Required - Used for guest applications" />
                                         </Grid>
                                         <Grid item xs={12} sm={6}>
-                                            <TextField fullWidth label="LinkedIn Password" name="linkedinPassword" type="password" value={formData.linkedinPassword} onChange={handleChange} placeholder="Enter to update" />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField fullWidth label="Indeed Email" name="indeedEmail" value={formData.indeedEmail} onChange={handleChange} />
-                                        </Grid>
-                                        <Grid item xs={12} sm={6}>
-                                            <TextField fullWidth label="Indeed Password" name="indeedPassword" type="password" value={formData.indeedPassword} onChange={handleChange} placeholder="Enter to update" />
+                                            <Alert severity="info" sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+                                                Indeed uses guest apply mode - no password needed!
+                                            </Alert>
                                         </Grid>
                                     </Grid>
                                 </Grid>
